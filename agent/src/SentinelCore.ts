@@ -28,7 +28,8 @@ export class SentinelCore {
         this.zk = new ZKProver();
     }
 
-    async processPaymentRequest(text: string, userId: string, platform: 'TELEGRAM' | 'SLACK'): Promise<SentinelResponse> {
+
+    async processPaymentRequest(text: string, userId: string, platform: 'TELEGRAM' | 'SLACK', mode: 'DEMO' | 'PRODUCTION' = 'DEMO'): Promise<SentinelResponse> {
         try {
             // 1. Parse Intent
             const intent = await this.agent.parseIntent(text);
@@ -40,7 +41,7 @@ export class SentinelCore {
 
             // 2. Resolve Registry & enforce Production Verification
             const verifiedAddr = VendorRegistry.getAddress(intent.recipient);
-            const isProduction = process.env.MODE === 'PRODUCTION';
+            const isProduction = mode === 'PRODUCTION';
 
             if (!verifiedAddr && isProduction) {
                 return {

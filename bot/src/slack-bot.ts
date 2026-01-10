@@ -42,7 +42,8 @@ const app = new App({
 app.command('/pay', async ({ command, ack, say }) => {
     await ack();
     await say("🛡️ *Sentinel Core* is analyzing your slash command...");
-    const response = await core.processPaymentRequest(command.text, command.user_id, 'SLACK');
+    const userMode = userModes.get(command.user_id) || 'demo';
+    const response = await core.processPaymentRequest(command.text, command.user_id, 'SLACK', userMode.toUpperCase() as 'DEMO' | 'PRODUCTION');
 
     if (response.status === 'NEEDS_APPROVAL') {
         const { intent, saved, zkProof } = response.data;
@@ -303,7 +304,9 @@ app.message(async ({ message, say, client }) => {
         await say("🛡️ *Sentinel Core* is analyzing your request on Slack...");
 
         // @ts-ignore
-        const response = await core.processPaymentRequest(text, message.user, 'SLACK');
+        const userMode = userModes.get(message.user) || 'demo';
+        // @ts-ignore
+        const response = await core.processPaymentRequest(text, message.user, 'SLACK', userMode.toUpperCase() as 'DEMO' | 'PRODUCTION');
         // @ts-ignore
         await handleSentinelResponse(say, message.user, response);
     } else {
@@ -637,7 +640,8 @@ app.event('message', async ({ message, say, client }) => {
             await say(`🗣️ *Heard:* _"${result.text}"_`);
 
             // Process Logic using Helper
-            const sentinelResponse = await core.processPaymentRequest(result.text, msg.user, 'SLACK');
+            const userMode = userModes.get(msg.user) || 'demo';
+            const sentinelResponse = await core.processPaymentRequest(result.text, msg.user, 'SLACK', userMode.toUpperCase() as 'DEMO' | 'PRODUCTION');
             await handleSentinelResponse(say, msg.user, sentinelResponse);
 
         } catch (e: any) {

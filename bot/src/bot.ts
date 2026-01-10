@@ -432,7 +432,8 @@ async function handlePaymentIntent(ctx: any, text: string) {
     await ctx.reply("🛡️ *Sentinel Core* is analyzing your request via Omnichannel Gateway...", { parse_mode: 'Markdown' });
 
     const userId = ctx.from?.id.toString() || "Unknown";
-    const response = await sentinelCore.processPaymentRequest(text, userId, 'TELEGRAM');
+    const userMode = ctx.session.mode || 'DEMO';
+    const response = await sentinelCore.processPaymentRequest(text, userId, 'TELEGRAM', userMode);
 
     if (response.status === 'ERROR') {
         return ctx.reply(response.message);
