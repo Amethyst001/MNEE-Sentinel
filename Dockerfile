@@ -24,7 +24,7 @@ COPY agent ./agent
 COPY bot ./bot
 
 # Copy Environment Variables (Ensure this is SECURE in real prod, typically injected via AWS Secrets Manager)
-COPY .env ./
+#COPY .env ./
 
 # Expose Port (Optional, App Runner likes port 8080 usually, but bots are outbound)
 EXPOSE 8080
