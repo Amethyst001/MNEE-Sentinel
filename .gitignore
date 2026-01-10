@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment Variables (CRITICAL)
+.env
+
+# Build Artifacts
+dist/
+coverage/
+
+# Documentation (Excluded per request, use local)
+docs/
+
+# Database (Keep schema, ignore local data)
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

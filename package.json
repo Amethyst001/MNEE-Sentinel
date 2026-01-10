@@ -1,0 +1,13 @@
+{
+    "name": "mnee-sentinel",
+    "version": "1.0.0",
+    "private": true,
+    "workspaces": [
+        "agent",
+        "bot",
+        "contracts"
+    ],
+    "scripts": {
+        "bot": "cd bot && npx ts-node src/bot.ts"
+    }
+}

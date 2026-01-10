@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "commonjs",
+        "outDir": "./dist",
+        "strict": false,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "baseUrl": "..",
+        "paths": {
+            "@agent/*": [
+                "agent/src/*"
+            ]
+        },
+        "moduleResolution": "node"
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
