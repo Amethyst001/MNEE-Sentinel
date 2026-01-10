@@ -650,7 +650,7 @@ async function executeTransaction(ctx: any, recipient: string, amount: string, i
             const successMsg = `✅ Payment Executed!\n\nTransaction confirmed on Ethereum Sepolia.\n\nRecipient: ${recipient.substring(0, 6)}...${recipient.substring(38)}\nAmount: ${amount} MNEE\nTx: ${result.txHash?.substring(0, 20)}...`;
 
             const receiptKeyboard = new InlineKeyboard()
-                .text("📄 View Receipt", "view_receipt")
+                .text("📸 Get Receipt", `get_receipt:${result.txHash}`)
                 .url("🔗 Etherscan", `https://sepolia.etherscan.io/tx/${result.txHash}`);
 
             await ctx.reply(successMsg, { reply_markup: receiptKeyboard, link_preview_options: { is_disabled: true } });
@@ -978,6 +978,43 @@ bot.on("message:text", async (ctx) => {
         if (lower.length > 5 && (lower.includes("pay") || lower.includes("send") || lower.includes("transfer") || lower.includes("mnee"))) {
             await handlePaymentIntent(ctx, ctx.message.text);
         }
+    }
+});
+
+// ✅ TELEGRAM RECEIPT HANDLER (Playwright)
+import { chromium } from 'playwright-chromium';
+
+bot.callbackQuery(/^get_receipt:(.+)$/, async (ctx) => {
+    const txHash = ctx.match[1];
+    const explorerUrl = `https://sepolia.basescan.org/tx/${txHash}`;
+
+    await ctx.answerCallbackQuery({ text: "📸 Generating Verified Receipt..." });
+    await ctx.reply("📸 Verified Receipt Generating...\nRequest sent to headless browser. Please wait ~5 seconds.");
+
+    try {
+        console.log(`📸 Launching Headless Browser for: ${explorerUrl}`);
+        const browser = await chromium.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+        });
+
+        const context = await browser.newContext({ viewport: { width: 1280, height: 1024 }, deviceScaleFactor: 2 });
+        const page = await context.newPage();
+
+        await page.goto(explorerUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(2000); // Visual wait
+
+        const buffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 80 });
+        await browser.close();
+
+        await ctx.replyWithPhoto(new grammy.InputFile(buffer, `receipt_${txHash}.jpg`), {
+            caption: `🧾 *Verified On-Chain Receipt*\n[View on Explorer](${explorerUrl})`,
+            parse_mode: "Markdown"
+        });
+
+    } catch (error) {
+        console.error("Screenshot failed:", error);
+        await ctx.reply(`🚫 *Screenshot Error*: [Click to View Receipt](${explorerUrl})`, { parse_mode: "Markdown" });
     }
 });
 

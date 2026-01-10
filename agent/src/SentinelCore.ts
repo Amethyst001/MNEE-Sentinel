@@ -32,13 +32,28 @@ export class SentinelCore {
         try {
             // 1. Parse Intent
             const intent = await this.agent.parseIntent(text);
-            if (!intent) return { status: 'ERROR', message: "❌ Could not understand payment intent." };
 
-            // 2. Resolve Registry
-            const address = VendorRegistry.getAddress(intent.recipient);
-            if (address) intent.address = address;
+            // Handle Parsing Failure
+            if (!intent) {
+                return { status: 'ERROR', message: "❌ Could not understand payment intent. Please check formatting (e.g., 'Pay 50 MNEE to AWS')." };
+            }
+
+            // 2. Resolve Registry & enforce Production Verification
+            const verifiedAddr = VendorRegistry.getAddress(intent.recipient);
+            const isProduction = process.env.MODE === 'PRODUCTION';
+
+            if (!verifiedAddr && isProduction) {
+                return {
+                    status: 'BLOCKED',
+                    message: `🚫 **Vendor Unverified**: '${intent.recipient}' is not in the Trusted Registry.\nIn Production, you can only pay verified vendors.`
+                };
+            }
+
+            if (verifiedAddr) intent.address = verifiedAddr;
 
             // 3. Negotiate
+            // (Only negotiate if it's a verified vendor service, else skip optimization for P2P?)
+            // For now, we negotiate everything.
             const finalPrice = await this.agent.negotiateWithSupplier(intent.recipient, intent.amount);
             const saved = intent.amount - Math.floor(finalPrice);
             intent.amount = Math.floor(finalPrice);

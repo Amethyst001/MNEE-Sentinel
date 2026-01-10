@@ -107,6 +107,7 @@ export class VoiceTranscriber {
      */
     private async transcribeWithAzure(audioBuffer: Buffer): Promise<{ text: string, confidence: number, engine: string }> {
         if (!this.azureKey) {
+            console.warn("⚠️ Voice Transcriber: AZURE_SPEECH_KEY is missing. Falling back to Gemini.");
             throw new Error("Azure key not configured");
         }
 
