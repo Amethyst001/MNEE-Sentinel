@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { VendorRegistry } from './VendorRegistry';
 
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
@@ -75,7 +76,6 @@ export class GeminiAgent {
             const parsed = JSON.parse(text);
 
             // PRODUCTION: Vendor Verification
-            const { VendorRegistry } = require('./VendorRegistry');
             const vendor = VendorRegistry.findVendor(parsed.recipient);
 
             if (vendor) {
@@ -146,6 +146,7 @@ export class GeminiAgent {
                 }
             }
         }
+        throw new Error("All Gemini API retries exhausted.");
     }
 
     /**

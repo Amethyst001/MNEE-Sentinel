@@ -1,4 +1,4 @@
-import { Bot, session, Context, SessionFlavor, InlineKeyboard } from "grammy";
+import { Bot, session, Context, SessionFlavor, InlineKeyboard, InputFile } from "grammy";
 import { MandateManager } from "@agent/MandateManager";
 import { GeminiAgent } from "@agent/GeminiAgent";
 import { GeminiAuditor } from "@agent/GeminiAuditor";
@@ -16,6 +16,7 @@ import { ZKProver } from "@agent/ZKProver";
 import { SentinelCore } from "@agent/SentinelCore";
 import * as dotenv from "dotenv";
 import * as path from "path";
+import * as crypto from "crypto";
 
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
@@ -278,42 +279,6 @@ bot.command("authorize", async (ctx) => {
     }
 });
 
-// Audit Command - Export Compliance Logs
-bot.command("audit", async (ctx) => {
-    try {
-        // Give db time to init (constructor handles it async)
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const logs = await auditLogger.exportLogs();
-
-        if (!logs || logs.length === 0) {
-            await ctx.reply(
-                "📋 Audit Log: No transactions recorded yet.\n\n" +
-                "Use /pay to create your first mandate and generate audit entries."
-            );
-            return;
-        }
-
-        let response = "📋 Recent Audit Logs (Last 5)\n\n";
-        for (const log of logs.slice(0, 5)) {
-            response += `ID: ${log.id}\n`;
-            response += `Action: ${log.action}\n`;
-            response += `Status: ${log.status}\n`;
-            response += `Hash: ${log.hash}\n\n`;
-        }
-
-        response += "Full audit trail stored in sentinel.db (SQLite)\n";
-        response += "Export available in JSON-LD format for compliance.";
-
-        await ctx.reply(response);
-    } catch (error) {
-        await ctx.reply(
-            "📋 Audit Log Status\n\n" +
-            "Database: Connected\n" +
-            "Entries: 0 (No transactions yet)\n\n" +
-            "Create a payment with /pay to start generating audit trails."
-        );
-    }
-});
 
 // Voice Biometrics and Transcription
 const voiceVerifier = new BiometricVoiceVerifier();
@@ -347,7 +312,7 @@ bot.on("message:voice", async (ctx) => {
         // --- LIVENESS CHALLENGE HANDLER ---
         if (ctx.session.step === "AWAITING_CHALLENGE") {
             const spokenText = transcription.text.toUpperCase();
-            const expected = ctx.session.challengeWord.toUpperCase();
+            const expected = (ctx.session.challengeWord || '').toUpperCase();
 
             // Allow partial match/fuzzy match
             if (spokenText.includes(expected)) {
@@ -394,7 +359,7 @@ bot.on("message:voice", async (ctx) => {
 
         if (isEnrollmentPhrase) {
             // Generate a hash from the audio as the voice profile
-            const profileHash = require('crypto').createHash('sha256').update(audioBuffer).digest('hex').substring(0, 32);
+            const profileHash = crypto.createHash('sha256').update(audioBuffer).digest('hex').substring(0, 32);
             await userSettings.enrollVoice(ctx.from.id, profileHash);
             ctx.session.voiceEnrolled = true;
             return ctx.reply(`✅ Voice Profile Enrolled Successfully!\n\nYour voiceprint has been saved. Future voice commands will verify your identity.\n\nProfile Hash: ${profileHash.substring(0, 16)}...`);
@@ -596,7 +561,7 @@ bot.command("export_logs", async (ctx) => {
     await ctx.reply("📂 Gathering Forensic Audit Logs...");
     try {
         const filePath = await auditLogger.dumpToCSV();
-        const { InputFile } = require('grammy');
+        // const { InputFile } = require('grammy'); // Deprecated
         await ctx.replyWithDocument(new InputFile(filePath), { caption: "📑 Forensic Audit Export (CSV)\n\nW3C JSON-LD Compatible Traceability" });
     } catch (e) {
         await ctx.reply("❌ Export failed. Please try again later.");
@@ -728,124 +693,6 @@ bot.callbackQuery("reject_mandate", async (ctx) => {
     ctx.session.pendingMandate = null;
 });
 
-// VIEW RECEIPT - Screenshot of Basescan transaction
-bot.callbackQuery("view_receipt", async (ctx) => {
-    const txHash = ctx.session.lastTxHash;
-    if (!txHash) {
-        return ctx.answerCallbackQuery({ text: "No transaction found", show_alert: true });
-    }
-
-    await ctx.answerCallbackQuery({ text: "Generating receipt..." });
-
-    let patienceMsg: any | undefined;
-    let patienceTimer: any | undefined;
-
-    try {
-        // Take screenshot of Etherscan transaction page using Playwright (Ultra-Reliable 2026 Edition)
-        const { chromium } = require('playwright-chromium');
-        const path = require('path');
-        const os = require('os');
-
-        console.log("📸 Starting Playwright with Stealth for receipt screenshot...");
-
-        // Patience message - Triggered if it takes more than 3 seconds (User requested 3-5s)
-        patienceTimer = setTimeout(async () => {
-            try {
-                patienceMsg = await ctx.reply("⌛ Etherscan is performing a security check (Cloudflare). I'm handling it, should be about 15 seconds...");
-            } catch (e) { }
-        }, 4000);
-
-        const browser = await chromium.launch({
-            headless: true,
-            args: [
-                '--disable-blink-features=AutomationControlled',
-                '--no-sandbox',
-                '--disable-infobars',
-                '--window-position=0,0',
-                '--ignore-certifcate-errors',
-                '--ignore-certifcate-errors-spki-list',
-                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            ]
-        });
-
-        const context = await browser.newContext({
-            viewport: { width: 1280, height: 1024 },
-            javaScriptEnabled: true
-        });
-
-        const page = await context.newPage();
-
-        // Mask as real user (Forensic stealth script)
-        await page.addInitScript(() => {
-            Object.defineProperty(navigator, 'webdriver', { get: () => false });
-            // @ts-ignore
-            window.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-            // @ts-ignore
-            const originalQuery = window.navigator.permissions.query;
-            // @ts-ignore
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    originalQuery(parameters)
-            );
-        });
-
-        const url = `https://sepolia.etherscan.io/tx/${txHash}`;
-        console.log(`📸 Navigating to: ${url}`);
-
-        // Navigate and wait for the page to actually settle
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-        // Wait for specific element to confirm Cloudflare bypass
-        console.log("📸 Waiting for transaction card to appear (Cloudflare bypass wait)...");
-        try {
-            await page.waitForSelector('#wrapper', { timeout: 20000 });
-
-            // DISMISS COOKIE BANNER (User Request)
-            try {
-                const cookieBtn = page.locator('button:has-text("Got it!")');
-                if (await cookieBtn.isVisible()) {
-                    console.log("📸 Dismissing cookie banner...");
-                    await cookieBtn.click();
-                }
-            } catch (e) {
-                console.log("📸 Cookie banner not found or already gone.");
-            }
-        } catch (e) {
-            console.log("📸 Transitioning or timeout, proceeding with snapshot...");
-        }
-
-        // Small extra delay for hydration
-        await new Promise(r => setTimeout(r, 3000));
-
-        // Windows-compatible temp path
-        const screenshotPath = path.join(os.tmpdir(), `receipt_${Date.now()}.png`);
-        console.log(`📸 Saving screenshot to: ${screenshotPath}`);
-
-        await page.screenshot({ path: screenshotPath, fullPage: false });
-        await browser.close();
-
-        // Send screenshot
-        const { InputFile } = require('grammy');
-        await ctx.replyWithPhoto(new InputFile(screenshotPath));
-        await ctx.reply(`📄 Receipt for: ${txHash.substring(0, 20)}...\n\n🔗 https://sepolia.etherscan.io/tx/${txHash}`, { link_preview_options: { is_disabled: true } });
-        console.log("📸 Screenshot sent successfully!");
-
-    } catch (error: any) {
-        console.error("📸 Screenshot error:", error.message);
-        // Fallback to text receipt
-        const receiptMsg = `📄 Transaction Receipt\n\nHash: ${txHash}\n\n🔗 View on Etherscan:\nhttps://sepolia.etherscan.io/tx/${txHash}`;
-        await ctx.reply(receiptMsg, { link_preview_options: { is_disabled: true } });
-    } finally {
-        // Cleanup patience message regardless of outcome
-        clearTimeout(patienceTimer);
-        if (patienceMsg) {
-            try { await ctx.api.deleteMessage(ctx.chat.id, patienceMsg.message_id); } catch (e) { }
-        }
-    }
-});
 
 // REQUEST FORENSIC AUDIT - Dynamic Whitelisting
 bot.callbackQuery("request_audit", async (ctx) => {
@@ -1007,7 +854,7 @@ bot.callbackQuery(/^get_receipt:(.+)$/, async (ctx) => {
         const buffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 80 });
         await browser.close();
 
-        await ctx.replyWithPhoto(new grammy.InputFile(buffer, `receipt_${txHash}.jpg`), {
+        await ctx.replyWithPhoto(new InputFile(buffer, `receipt_${txHash}.jpg`), {
             caption: `🧾 *Verified On-Chain Receipt*\n[View on Explorer](${explorerUrl})`,
             parse_mode: "Markdown"
         });

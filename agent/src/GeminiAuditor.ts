@@ -23,7 +23,7 @@ export class GeminiAuditor {
 
         console.log(`🛡️ Auditor initialized with ${keys.length} API Keys (Rotation Active).`);
 
-        const modelVariants = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash-exp", "gemini-1.5-pro"];
+        const modelVariants = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash-exp"];
 
         keys.forEach((key, kIndex) => {
             const genAI = new GoogleGenerativeAI(key);
@@ -215,5 +215,6 @@ export class GeminiAuditor {
                 }
             }
         }
+        throw new Error("All Gemini API retries exhausted.");
     }
 }

@@ -14,12 +14,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@google/generative-ai": "^0.24.1",
-    "circomlib": "^2.0.5",
-    "express": "^5.2.1",
-    "googleapis": "^170.0.0",
-    "mathjs": "^14.0.0",
     "snarkjs": "^0.7.5",
-    "tesseract.js": "^7.0.0",
     "@slack/bolt": "^4.6.0",
     "@types/node": "^25.0.3",
     "axios": "^1.13.2",

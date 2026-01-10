@@ -381,7 +381,7 @@ app.command('/export_logs', async ({ command, ack, client }) => {
         // Upload to Slack
         await client.files.uploadV2({
             channel_id: command.channel_id,
-            file: require('fs').createReadStream(filePath),
+            file: fs.createReadStream(filePath),
             filename: `mnee_audit_export_${Date.now()}.csv`,
             title: "📑 Forensic Audit Export (CSV)",
             initial_comment: "✅ Here is the full W3C-compliant traceability report."
