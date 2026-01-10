@@ -713,7 +713,19 @@ app.view('confirm_pin_submission', async ({ ack, body, view, client }) => {
 });
 
 (async () => {
-    await app.start();
-    console.log('⚡️ MNEE Sentinel is running on Slack!');
-    core.getAuditLogger().logEvent("SYSTEM", "Slack Gateway Online", "SUCCESS", {});
+    // Graceful Degradation: Only start Slack bot if tokens are configured
+    if (!process.env.SLACK_BOT_TOKEN || !process.env.SLACK_APP_TOKEN) {
+        console.warn('⚠️ Slack Bot: SLACK_BOT_TOKEN or SLACK_APP_TOKEN not configured. Slack bot will not start.');
+        console.warn('⚠️ Telegram bot will continue to run independently.');
+        return;
+    }
+
+    try {
+        await app.start();
+        console.log('⚡️ MNEE Sentinel is running on Slack!');
+        core.getAuditLogger().logEvent("SYSTEM", "Slack Gateway Online", "SUCCESS", {});
+    } catch (error: any) {
+        console.error('❌ Slack Bot failed to start:', error.message);
+        console.warn('⚠️ Telegram bot will continue to run independently.');
+    }
 })();
