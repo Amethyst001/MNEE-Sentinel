@@ -877,4 +877,13 @@ http.createServer((req, res) => {
 
 console.log("🚀 MNEE Sentinel Bot Starting...");
 auditLogger.logSystemStart();
-bot.start();
+
+// Start Telegram bot with error handling
+bot.start({
+    onStart: (botInfo) => {
+        console.log(`✅ Telegram Bot Online: @${botInfo.username}`);
+    }
+}).catch((error) => {
+    console.error("❌ Telegram Bot failed to start:", error.message);
+    console.warn("⚠️ Slack bot will continue running if configured.");
+});

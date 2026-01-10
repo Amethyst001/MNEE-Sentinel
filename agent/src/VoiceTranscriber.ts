@@ -45,7 +45,7 @@ export class VoiceTranscriber {
 
         // 1. Try Azure Speech-to-Text
         try {
-            const azureResult = await this.transcribeWithAzure(audioBuffer);
+            const azureResult = await this.transcribeWithAzure(audioBuffer, mimeType);
             if (azureResult.text) {
                 azureResult.text = this.sanitize(azureResult.text);
                 results.push(azureResult);
@@ -105,18 +105,32 @@ export class VoiceTranscriber {
     /**
      * Azure Cognitive Services Speech-to-Text
      */
-    private async transcribeWithAzure(audioBuffer: Buffer): Promise<{ text: string, confidence: number, engine: string }> {
+    private async transcribeWithAzure(audioBuffer: Buffer, mimeType: string): Promise<{ text: string, confidence: number, engine: string }> {
         if (!this.azureKey) {
             console.warn("⚠️ Voice Transcriber: AZURE_SPEECH_KEY is missing. Falling back to Gemini.");
             throw new Error("Azure key not configured");
         }
+
+        // Map common audio formats to Azure-compatible Content-Types
+        let contentType = 'audio/ogg; codecs=opus'; // Default for Telegram
+        if (mimeType.includes('webm')) {
+            contentType = 'audio/webm; codecs=opus';
+        } else if (mimeType.includes('mp4') || mimeType.includes('m4a')) {
+            contentType = 'audio/mp4';
+        } else if (mimeType.includes('wav')) {
+            contentType = 'audio/wav';
+        } else if (mimeType.includes('ogg')) {
+            contentType = 'audio/ogg; codecs=opus';
+        }
+
+        console.log(`🎤 Azure: Using Content-Type: ${contentType} (from mime: ${mimeType})`);
 
         const endpoint = `https://${this.azureRegion}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1`;
 
         const response = await axios.post(endpoint, audioBuffer, {
             headers: {
                 'Ocp-Apim-Subscription-Key': this.azureKey,
-                'Content-Type': 'audio/ogg; codecs=opus',
+                'Content-Type': contentType,
                 'Accept': 'application/json'
             },
             params: {
