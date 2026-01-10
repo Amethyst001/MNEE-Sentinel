@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { SentinelCore } from '../../agent/src/SentinelCore';
 import { TokenService } from '../../agent/src/TokenService';
-import { chromium } from 'playwright-chromium';
+// import { chromium } from 'playwright-chromium'; // Removed to avoid Native Module crash
 
 import axios from 'axios';
 import { VoiceTranscriber } from '../../agent/src/VoiceTranscriber';
@@ -551,76 +551,14 @@ app.action('get_receipt', async ({ ack, body, client, action }) => {
 
     await client.chat.postMessage({
         channel: channelId,
-        text: "📸 *Generating receipt screenshot...* This may take a moment."
+        text: "📸 *Generating receipt...*"
     });
 
-    try {
-        const browser = await chromium.launch({
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-blink-features=AutomationControlled',
-                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            ]
-        });
-
-        const context = await browser.newContext({
-            viewport: { width: 1280, height: 1024 },
-            javaScriptEnabled: true
-        });
-
-        const page = await context.newPage();
-
-        // Mask as real user (Forensic stealth script - same as Telegram)
-        await page.addInitScript(() => {
-            Object.defineProperty(navigator, 'webdriver', { get: () => false });
-            // @ts-ignore
-            window.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-        });
-
-        console.log(`📸 Navigating to: ${explorerUrl}`);
-        await page.goto(explorerUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.waitForTimeout(3000); // 3s wait for hydration
-
-        // Dismiss cookie banner
-        try {
-            const cookieBtn = page.locator('button:has-text("Got it!")');
-            if (await cookieBtn.isVisible()) {
-                await cookieBtn.click();
-            }
-        } catch (e) { }
-
-        const screenshotPath = path.join(__dirname, `../../data/receipt_${Date.now()}.png`);
-        await page.screenshot({ path: screenshotPath, fullPage: false });
-        await browser.close();
-
-        // Upload screenshot to Slack (Buffer)
-        await client.files.uploadV2({
-            channel_id: channelId,
-            file: fs.readFileSync(screenshotPath),
-            filename: `receipt.png`,
-            title: "📜 Transaction Receipt",
-            initial_comment: "Here is your blockchain receipt screenshot."
-        });
-
-        // Cleanup
-        fs.unlinkSync(screenshotPath);
-    } catch (screenshotError: any) {
-        console.error("Screenshot generation failed:", screenshotError);
-
-        let errorMsg = screenshotError.message || screenshotError;
-        if (JSON.stringify(screenshotError).includes('missing_scope')) {
-            errorMsg = "Missing Slack Permission: 'files:write'. Please add this scope in App Settings > OAuth & Permissions.";
-        }
-
-        await client.chat.postMessage({
-            channel: channelId,
-            text: `⚠️ *Screenshot failed.* \nError: _${errorMsg}_\nYou can view the receipt directly: <${explorerUrl}|Open on Etherscan>`
-        });
-    }
+    // Mock response for cloud mode
+    await client.chat.postMessage({
+        channel: channelId,
+        text: "🚫 *Receipt Screenshot Unavailable*: Visual proofs are disabled in Cloud Mode to optimize performance. Please check the explorer link directly: " + explorerUrl
+    });
 });
 
 app.action('reject_payment', async ({ ack, body, client }) => {
