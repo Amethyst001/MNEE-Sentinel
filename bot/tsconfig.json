@@ -6,10 +6,10 @@
         "strict": false,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "baseUrl": "..",
+        "baseUrl": ".",
         "paths": {
             "@agent/*": [
-                "agent/src/*"
+                "../agent/src/*"
             ]
         },
         "moduleResolution": "node"
