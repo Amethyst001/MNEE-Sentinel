@@ -4,8 +4,13 @@ FROM node:18-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (for Native Modules if needed)
-# RUN apt-get update && apt-get install -y python3 make g++
+# Install system dependencies (for Native Modules & Playwright/Chromium)
+RUN apt-get update && apt-get install -y \
+    python3 make g++ \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 librandr2 \
+    libgbm1 libasound2 libpango-1.0-0 libcairo2 \
+    fonts-liberation fonts-noto-color-emoji fontconfig
 
 # Copy Package definitions FIRST (Layer Caching)
 COPY bot/package*.json ./bot/
@@ -14,12 +19,12 @@ COPY agent/package*.json ./agent/
 # Install Agent Dependencies
 WORKDIR /app/agent
 RUN npm install
-
 # Install Bot Dependencies
 WORKDIR /app/bot
 RUN npm install
 
 # Copy Source Code
+WORKDIR /app
 COPY agent ./agent
 COPY bot ./bot
 

@@ -981,10 +981,6 @@ bot.on("message:text", async (ctx) => {
     }
 });
 
-console.log("🚀 MNEE Sentinel Bot Starting...");
-auditLogger.logSystemStart();
-bot.start();
-
 // KEEP-ALIVE for Azure Container Apps
 import * as http from "http";
 const keepAlivePort = process.env.PORT || 8080;
@@ -994,3 +990,7 @@ http.createServer((req, res) => {
 }).listen(keepAlivePort, () => {
     console.log("🌐 Keep-Alive Server listening on port", keepAlivePort);
 });
+
+console.log("🚀 MNEE Sentinel Bot Starting...");
+auditLogger.logSystemStart();
+bot.start();

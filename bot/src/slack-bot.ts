@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { SentinelCore } from '../../agent/src/SentinelCore';
 import { TokenService } from '../../agent/src/TokenService';
-// import { chromium } from 'playwright-chromium'; // Removed to avoid Native Module crash
+import { chromium } from 'playwright-chromium';
 
 import axios from 'axios';
 import { VoiceTranscriber } from '../../agent/src/VoiceTranscriber';
@@ -554,11 +554,48 @@ app.action('get_receipt', async ({ ack, body, client, action }) => {
         text: "📸 *Generating receipt...*"
     });
 
-    // Mock response for cloud mode
-    await client.chat.postMessage({
-        channel: channelId,
-        text: "🚫 *Receipt Screenshot Unavailable*: Visual proofs are disabled in Cloud Mode to optimize performance. Please check the explorer link directly: " + explorerUrl
-    });
+    // ✅ OPTIMIZED: Taking Screenshot using Playwright (Properly Wired)
+    try {
+        console.log(`📸 Launching Headless Browser for: ${explorerUrl}`);
+
+        const browser = await chromium.launch({
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // Critical for Docker to avoid crashes
+                '--disable-gpu'
+            ]
+        });
+
+        const context = await browser.newContext({
+            viewport: { width: 1280, height: 1024 },
+            deviceScaleFactor: 2
+        });
+
+        const page = await context.newPage();
+        await page.goto(explorerUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+        // Quick visual wait
+        await page.waitForTimeout(2000);
+
+        const buffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 80 }); // JPEG is smaller/faster
+        await browser.close();
+
+        await client.files.upload({
+            channels: channelId,
+            initial_comment: "🧾 *Verified On-Chain Receipt*",
+            file: buffer,
+            filename: "receipt.jpg"
+        });
+
+    } catch (error) {
+        console.error("Screenshot failed (Fallback to link):", error);
+        await client.chat.postMessage({
+            channel: channelId,
+            text: `🚫 *Screenshot Error*: <${explorerUrl}|Click to View Receipt>`
+        });
+    }
 });
 
 app.action('reject_payment', async ({ ack, body, client }) => {
