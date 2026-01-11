@@ -566,14 +566,17 @@ app.action('get_receipt', async ({ ack, body, client, action }) => {
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage', // Critical for Docker to avoid crashes
-                '--disable-gpu'
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-blink-features=AutomationControlled', // Stealth
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
             ]
         });
 
         const context = await browser.newContext({
             viewport: { width: 1280, height: 1024 },
-            deviceScaleFactor: 2
+            deviceScaleFactor: 2,
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
         });
 
         const page = await context.newPage();
@@ -585,8 +588,9 @@ app.action('get_receipt', async ({ ack, body, client, action }) => {
         const buffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 80 }); // JPEG is smaller/faster
         await browser.close();
 
-        await client.files.upload({
-            channels: channelId,
+        // Use uploadV2 (upload is deprecated)
+        await client.files.uploadV2({
+            channel_id: channelId,
             initial_comment: "🧾 *Verified On-Chain Receipt*",
             file: buffer,
             filename: "receipt.jpg"
@@ -599,6 +603,11 @@ app.action('get_receipt', async ({ ack, body, client, action }) => {
             text: `🚫 *Screenshot Error*: <${explorerUrl}|Click to View Receipt>`
         });
     }
+});
+
+// ✅ Global Error Handler for Slack
+app.error(async (error) => {
+    console.error('❌ Slack App Error:', error);
 });
 
 app.action('reject_payment', async ({ ack, body, client }) => {
