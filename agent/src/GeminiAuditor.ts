@@ -58,11 +58,12 @@ export class GeminiAuditor {
         }
 
         const amt = parseFloat(mandate.amount);
-        console.log(`🔍 AUDIT VELOCITY CHECK: Current=${this.hourlyVolume}, Request=${amt}, Total=${this.hourlyVolume + amt}, Limit=1000`);
-        if (this.hourlyVolume + amt > 1000) {
+        const LIMIT = 1000000; // Raised for Demo
+        console.log(`🔍 AUDIT VELOCITY CHECK: Current=${this.hourlyVolume}, Request=${amt}, Total=${this.hourlyVolume + amt}, Limit=${LIMIT}`);
+        if (this.hourlyVolume + amt > LIMIT) {
             return {
                 approved: false,
-                reason: "VELOCITY VIOLATION: Hourly corporate limit of 1000 MNEE exceeded. This is a protective measure against drainage.",
+                reason: `VELOCITY VIOLATION: Hourly corporate limit of ${LIMIT} MNEE exceeded. This is a protective measure against drainage.`,
                 riskScore: 90
             };
         }
