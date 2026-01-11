@@ -834,7 +834,7 @@ bot.on("message:text", async (ctx) => {
     }
 });
 
-// ✅ TELEGRAM RECEIPT HANDLER (Playwright) - Local HTML Generation
+// ✅ TELEGRAM RECEIPT HANDLER (Playwright) - Stealth Etherscan
 import { chromium } from 'playwright-chromium';
 
 bot.callbackQuery("get_last_receipt", async (ctx) => {
@@ -844,107 +844,55 @@ bot.callbackQuery("get_last_receipt", async (ctx) => {
         return;
     }
 
-    // Generate Timestamp
-    const date = new Date().toLocaleString("en-US", { timeZone: "UTC" });
-
-    // 🎨 CREATE LOCAL RECEIPT HTML
+    // Use Sepolia Etherscan
     const explorerUrl = `https://sepolia.etherscan.io/tx/${txHash}`;
-    const htmlContent = `
-    <html>
-    <head>
-        <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .receipt { background: white; width: 400px; padding: 40px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border-top: 6px solid #6200ea; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .logo { font-size: 24px; font-weight: bold; color: #333; margin-bottom: 5px; }
-            .sub { color: #888; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
-            .amount { font-size: 48px; font-weight: bold; color: #333; text-align: center; margin: 20px 0; }
-            .currency { font-size: 20px; color: #666; font-weight: normal; }
-            .details { margin-top: 30px; border-top: 2px dashed #eee; padding-top: 20px; }
-            .row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px; }
-            .label { color: #888; }
-            .value { color: #333; font-weight: 500; font-family: monospace; }
-            .status { color: #2e7d32; font-weight: bold; background: #e8f5e9; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #aaa; }
-        </style>
-    </head>
-    <body>
-        <div class="receipt">
-            <div class="header">
-                <div class="logo">MNEE Sentinel</div>
-                <div class="sub">Official Transaction Receipt</div>
-            </div>
-            
-            <div style="text-align: center;"><span class="status">● CONFIRMED ON-CHAIN</span></div>
 
-            <div class="amount">50.00 <span class="currency">MNEE</span></div>
-
-            <div class="details">
-                <div class="row">
-                    <span class="label">Date (UTC)</span>
-                    <span class="value">${date}</span>
-                </div>
-                <div class="row">
-                    <span class="label">Network</span>
-                    <span class="value">Ethereum Sepolia</span>
-                </div>
-                <div class="row">
-                    <span class="label">Type</span>
-                    <span class="value">Transfer (ERC-20)</span>
-                </div>
-                <div class="row">
-                    <span class="label">Gas Fee</span>
-                    <span class="value">SPONSORED (Paymaster)</span>
-                </div>
-                <div class="row">
-                    <span class="label">Tx Hash</span>
-                    <span class="value">${txHash.substring(0, 10)}...${txHash.substring(60)}</span>
-                </div>
-            </div>
-
-            <div class="footer">
-                Verified by MNEE Sentinel Audit Log<br>
-                ${explorerUrl}
-            </div>
-        </div>
-    </body>
-    </html>
-    `;
-
-    await ctx.answerCallbackQuery({ text: "📸 Generating Verified Receipt..." });
-    await ctx.reply("📸 Generating Enterprise Receipt...");
+    await ctx.answerCallbackQuery({ text: "📸 Browsing Etherscan..." });
+    await ctx.reply("📸 Fetching verified receipt from Etherscan...\n(This bypasses bot protection, please wait ~8s)");
 
     try {
-        console.log(`📸 Generating Local Receipt for: ${txHash}`);
+        console.log(`📸 Launching Stealth Browser for: ${explorerUrl}`);
         const browser = await chromium.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-blink-features=AutomationControlled', // Key for anti-detection
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+            ]
         });
 
-        const context = await browser.newContext({ viewport: { width: 600, height: 800 }, deviceScaleFactor: 2 });
+        const context = await browser.newContext({
+            viewport: { width: 1280, height: 1024 },
+            deviceScaleFactor: 2,
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+        });
+
         const page = await context.newPage();
 
-        await page.setContent(htmlContent); // Render LOCAL html - bypasses Cloudflare
-        await page.waitForTimeout(500); // Tiny wait for fonts
+        // Navigate and wait for Cloudflare/Challenge
+        await page.goto(explorerUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
-        // Screenshot the .receipt element only
-        const element = await page.$('.receipt');
-        const buffer = await element?.screenshot({ type: 'jpeg', quality: 90 });
+        // Wait for specific Etherscan element that indicates success (not the challenge page)
+        try {
+            await page.waitForSelector('#content', { timeout: 10000 });
+        } catch (e) {
+            console.log("⚠️ Selector wait timeout, screenshotting anyway...");
+        }
 
+        await page.waitForTimeout(3000); // Visual stability wait
+
+        const buffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 80 });
         await browser.close();
 
-        if (buffer) {
-            await ctx.replyWithPhoto(new InputFile(buffer, `receipt_${txHash.substring(0, 10)}.jpg`), {
-                caption: `🧾 *Verified Enterprise Receipt*\n[View on Etherscan](${explorerUrl})`,
-                parse_mode: "Markdown"
-            });
-        } else {
-            throw new Error("Element not found");
-        }
+        await ctx.replyWithPhoto(new InputFile(buffer, `receipt_${txHash.substring(0, 10)}.jpg`), {
+            caption: `🧾 *Verified On-Chain Receipt*\n[View on Etherscan](${explorerUrl})`,
+            parse_mode: "Markdown"
+        });
 
     } catch (error) {
         console.error("Screenshot failed:", error);
-        await ctx.reply(`🚫Receipt Error: [View on Explorer](${explorerUrl})`, { parse_mode: "Markdown" });
+        await ctx.reply(`🚫 *Screenshot Error*: Cloudflare blocked the request.\n[Click to View Receipt](${explorerUrl})`, { parse_mode: "Markdown" });
     }
 });
 
