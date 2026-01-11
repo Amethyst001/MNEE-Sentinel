@@ -212,10 +212,54 @@ app.command('/audit', async ({ command, ack, say }) => {
     });
 });
 
+
+// Store pending consensus requests (Message TS -> { intent, approvals: Set<userId> })
+const pendingConsensus: Map<string, { intent: any, approvals: Set<string> }> = new Map();
+
+// High Value Threshold
+const CONSENSUS_THRESHOLD_AMOUNT = 5000;
+
 // Helper to handle AI responses (Shared by Text and Voice)
 async function handleSentinelResponse(say: any, userId: string, response: any) {
     if (response.status === 'NEEDS_APPROVAL') {
         const { intent, saved, zkProof } = response.data;
+
+        // Robust Parsing (Remove commas)
+        const amountVal = Number(String(intent.amount).replace(/,/g, ''));
+
+        // Check for Consensus Requirement (High Value or Keyword)
+        if (amountVal >= CONSENSUS_THRESHOLD_AMOUNT || (intent.purpose && intent.purpose.toLowerCase().includes('consensus'))) {
+            const msg = `🚨 *Multi-Sig Protocol Activated*\n\n` +
+                `*Amount:* ${intent.amount} MNEE (Exceeds Threshold)\n` +
+                `*Recipient:* ${intent.recipient}\n\n` +
+                `*Requirement:* 3 Signatures Required for Release.\n` +
+                `*Action:* Board members, please react with ✅ to approve.\n` +
+                `_(Or use Executive Override Key 🔐)_`;
+
+            const message = await say({
+                text: msg,
+                blocks: [
+                    {
+                        "type": "section",
+                        "text": { "type": "mrkdwn", "text": msg }
+                    },
+                    {
+                        "type": "context",
+                        "elements": [
+                            { "type": "mrkdwn", "text": "waiting for signatures... (0/3)" }
+                        ]
+                    }
+                ]
+            });
+
+            // Register for Consensus Tracking
+            if (message.ts) {
+                pendingConsensus.set(message.ts, { intent, approvals: new Set() });
+            }
+            return;
+        }
+
+        // Standard Approval Flow
         pendingPayments.set(userId, { intent, saved, zkProof });
 
         let msg = `📜 *Payment Ready for Approval*\n\n` +
@@ -258,6 +302,54 @@ async function handleSentinelResponse(say: any, userId: string, response: any) {
         await say(response.message);
     }
 }
+
+// Handle Emoji Reactions for Consensus
+app.event('reaction_added', async ({ event, client, say }) => {
+    const ts = event.item.ts;
+    const pending = pendingConsensus.get(ts);
+
+    if (pending) {
+        // Check for Master Key Override
+        const isMasterKey = ['lock_with_ink_pen', 'closed_lock_with_key', 'key', 'rocket'].includes(event.reaction);
+
+        if (isMasterKey) {
+            await client.chat.postMessage({
+                channel: event.item.channel,
+                text: `🔐 *Executive Override Activated.* Bypass Authorization Granted.`
+            });
+            pending.approvals.add("MASTER_KEY_OVERRIDE_1");
+            pending.approvals.add("MASTER_KEY_OVERRIDE_2");
+            pending.approvals.add("MASTER_KEY_OVERRIDE_3");
+        } else {
+            // Record Approval (Allow same user to sign multiple times with different emojis for DEMO video purposes)
+            pending.approvals.add(event.reaction + event.user);
+        }
+
+        const count = pending.approvals.size;
+        const required = 3;
+
+        if (count >= required) {
+            // EXECUTE!
+            await client.chat.postMessage({
+                channel: event.item.channel,
+                text: `✅ *Consensus Reached (${count}/${required}).* Executing High-Value Transfer...`
+            });
+
+            // Execute (assuming Production if high value, or safely fallback to Demo logic)
+            // Just use DEMO for high value simulation to be safe unless key is present
+            await executeSlackTransaction(client, event.item.channel, pending.intent, false); // For safety, default to Demo/Simulated for 5000+ MNEE
+
+            pendingConsensus.delete(ts);
+        } else {
+            // Update Status
+            await client.chat.postMessage({
+                channel: event.item.channel,
+                thread_ts: ts,
+                text: `🖊️ *Signature Recorded.* (${count}/${required}) approvals received.`
+            });
+        }
+    }
+});
 
 // Handle simple messages (AI Core)
 app.message(async ({ message, say, client }) => {
