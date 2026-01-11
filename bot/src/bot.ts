@@ -120,7 +120,9 @@ Available Commands:
 • /pay 50 MNEE to Greg - Test payment
 • /setup - Configure bot
 • /setpin - Set security PIN
+• /changepin - Update your PIN
 • /audit - View logs
+• /export_logs - Download audit CSV
 
 Ready to test!`);
 });
@@ -144,7 +146,9 @@ Available Commands:
 • /pay 50 MNEE to AWS - Pay verified vendor
 • /setup - Check wallet status
 • /setpin - Required for security
-• /audit - Compliance export
+• /changepin - Update your PIN
+• /audit - View recent transactions
+• /export_logs - Download audit CSV
 
 ⚠️ Real funds will move.`);
 });
@@ -615,8 +619,9 @@ async function executeTransaction(ctx: any, recipient: string, amount: string, i
 
             const successMsg = `✅ Payment Executed!\n\nTransaction confirmed on Ethereum Sepolia.\n\nRecipient: ${recipient.substring(0, 6)}...${recipient.substring(38)}\nAmount: ${amount} MNEE\nTx: ${result.txHash?.substring(0, 20)}...`;
 
+            // Use short callback data - tx hash already stored in session
             const receiptKeyboard = new InlineKeyboard()
-                .text("📸 Get Receipt", `get_receipt:${result.txHash}`)
+                .text("📸 Get Receipt", "get_last_receipt")
                 .url("🔗 Etherscan", `https://sepolia.etherscan.io/tx/${result.txHash}`);
 
             await ctx.reply(successMsg, { reply_markup: receiptKeyboard, link_preview_options: { is_disabled: true } });
@@ -829,12 +834,17 @@ bot.on("message:text", async (ctx) => {
     }
 });
 
-// ✅ TELEGRAM RECEIPT HANDLER (Playwright)
+// ✅ TELEGRAM RECEIPT HANDLER (Playwright) - Uses session for tx hash
 import { chromium } from 'playwright-chromium';
 
-bot.callbackQuery(/^get_receipt:(.+)$/, async (ctx) => {
-    const txHash = ctx.match[1];
-    const explorerUrl = `https://sepolia.basescan.org/tx/${txHash}`;
+bot.callbackQuery("get_last_receipt", async (ctx) => {
+    const txHash = ctx.session.lastTxHash;
+    if (!txHash) {
+        await ctx.answerCallbackQuery({ text: "❌ No recent transaction found" });
+        return;
+    }
+
+    const explorerUrl = `https://sepolia.etherscan.io/tx/${txHash}`;
 
     await ctx.answerCallbackQuery({ text: "📸 Generating Verified Receipt..." });
     await ctx.reply("📸 Verified Receipt Generating...\nRequest sent to headless browser. Please wait ~5 seconds.");
@@ -855,7 +865,7 @@ bot.callbackQuery(/^get_receipt:(.+)$/, async (ctx) => {
         const buffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 80 });
         await browser.close();
 
-        await ctx.replyWithPhoto(new InputFile(buffer, `receipt_${txHash}.jpg`), {
+        await ctx.replyWithPhoto(new InputFile(buffer, `receipt_${txHash.substring(0, 10)}.jpg`), {
             caption: `🧾 *Verified On-Chain Receipt*\n[View on Explorer](${explorerUrl})`,
             parse_mode: "Markdown"
         });
