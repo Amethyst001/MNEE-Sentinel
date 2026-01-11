@@ -597,6 +597,115 @@ async function sendMandateApproval(ctx: any, intent: any, mandateData: any, save
     await ctx.reply(msg, { reply_markup: keyboard });
 }
 
+// Helper: Generate Premium Receipt
+async function generatePremiumReceipt(txHash: string, recipient: string, amount: string): Promise<InputFile | null> {
+    const date = new Date().toLocaleString("en-US", { timeZone: "UTC", month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true });
+
+    const htmlContent = `
+    <html>
+    <head>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+        <style>
+            body { 
+                font-family: 'Outfit', sans-serif; 
+                background-color: #0F172A; 
+                display: flex; 
+                justify-content: center; 
+                align-items: center; 
+                height: 100vh; 
+                margin: 0; 
+            }
+            .glass-card {
+                background: rgba(30, 41, 59, 0.7);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                width: 420px;
+                padding: 40px;
+                border-radius: 24px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+                position: relative;
+                overflow: hidden;
+            }
+            .glass-card::before {
+                content: '';
+                position: absolute;
+                top: 0; left: 0; right: 0; height: 6px;
+                background: linear-gradient(90deg, #6366f1, #8b5cf6, #d946ef);
+            }
+            .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+            .brand { color: #fff; font-size: 18px; font-weight: 700; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+            .brand span { background: linear-gradient(135deg, #6366f1, #d946ef); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+            .badge { background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid rgba(34, 197, 94, 0.3); }
+            
+            .amount-box { text-align: center; margin: 20px 0 40px 0; }
+            .amount { font-size: 56px; font-weight: 700; color: #fff; text-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+            .currency { font-size: 20px; color: #94a3b8; font-weight: 400; vertical-align: super; }
+            
+            .grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 30px; }
+            .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+            .label { color: #94a3b8; font-size: 14px; font-weight: 300; }
+            .value { color: #f8fafc; font-size: 14px; font-weight: 500; font-family: 'Outfit', monospace; letter-spacing: 0.5px; }
+            
+            .highlight { color: #d946ef; font-weight: 600; }
+            .gas-free { background: linear-gradient(90deg, #6366f1, #d946ef); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
+
+            .footer { margin-top: 20px; text-align: center; color: #64748b; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="glass-card">
+            <div class="header">
+                <div class="brand">🛡️ MNEE <span>SENTINEL</span></div>
+                <div class="badge">● CONFIRMED</div>
+            </div>
+
+            <div class="amount-box">
+                <span class="amount">${amount}</span> <span class="currency">MNEE</span>
+            </div>
+
+            <div class="grid">
+                <div class="row">
+                    <span class="label">Recipient</span>
+                    <span class="value">${recipient.substring(0, 6)}...${recipient.substring(38)}</span>
+                </div>
+                <div class="row">
+                    <span class="label">Date</span>
+                    <span class="value">${date}</span>
+                </div>
+                <div class="row">
+                    <span class="label">Transaction Fee</span>
+                    <span class="value gas-free">SPONSORED (Gasless)</span>
+                </div>
+                <div class="row">
+                    <span class="label">Reference ID</span>
+                    <span class="value">${txHash.substring(0, 16)}...</span>
+                </div>
+            </div>
+
+            <div class="footer">
+                Secured by Zero-Knowledge Proofs & Ethereum Sepolia
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    try {
+        const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-gpu'] });
+        const page = await browser.newPage({ viewport: { width: 600, height: 800 }, deviceScaleFactor: 2 });
+        await page.setContent(htmlContent);
+        await page.waitForTimeout(100); // Wait for render
+        const element = await page.$('.glass-card');
+        const buffer = await element?.screenshot({ type: 'png' });
+        await browser.close();
+        return buffer ? new InputFile(buffer, 'premium_receipt.png') : null;
+    } catch (e) {
+        console.error("Premium receipt gen failed:", e);
+        return null;
+    }
+}
+
 // Centralized Transaction Execution Logic
 async function executeTransaction(ctx: any, recipient: string, amount: string, isProduction: boolean, intent: any) {
     if (isProduction) {
@@ -605,12 +714,15 @@ async function executeTransaction(ctx: any, recipient: string, amount: string, i
         auditLogger.logEvent("SENTINEL_CORE", "Executing Omnichannel Transaction", "ROUTING", { recipient, gateway: "Telegram" });
 
         // Patience context
-        const patienceTimer = setTimeout(async () => {
-            try { await ctx.reply("⏳ Transaction sent! Waiting for network confirmation (Ethereum takes ~15-30s)..."); } catch (e) { }
-        }, 7000);
+        const patienceTimer = setTimeout(() => {
+            if (ctx.session.step !== "IDLE") {
+                ctx.reply("...Still confirming on chain. Ethereum is busy today. 🍵");
+            }
+        }, 15000);
 
-        const privateKey = process.env.PRIVATE_KEY!;
-        const result = await tokenService.sendTransfer(privateKey, recipient, amount);
+        await new Promise(resolve => setTimeout(resolve, 500)); // Non-blocking async gap logic
+        // const privateKey = process.env.PRIVATE_KEY!; // Moved inside sendTransfer
+        const result = await tokenService.sendTransfer(process.env.PRIVATE_KEY!, recipient, amount);
         clearTimeout(patienceTimer);
 
         if (result.success) {
@@ -619,12 +731,24 @@ async function executeTransaction(ctx: any, recipient: string, amount: string, i
 
             const successMsg = `✅ Payment Executed!\n\nTransaction confirmed on Ethereum Sepolia.\n\nRecipient: ${recipient.substring(0, 6)}...${recipient.substring(38)}\nAmount: ${amount} MNEE\nTx: ${result.txHash?.substring(0, 20)}...`;
 
-            // Use short callback data - tx hash already stored in session
-            const receiptKeyboard = new InlineKeyboard()
-                .text("📸 Get Receipt", "get_last_receipt")
-                .url("🔗 Etherscan", `https://sepolia.etherscan.io/tx/${result.txHash}`);
+            // 1. Generate Instant Premium Receipt
+            const receiptImage = await generatePremiumReceipt(result.txHash!, recipient, amount);
 
-            await ctx.reply(successMsg, { reply_markup: receiptKeyboard, link_preview_options: { is_disabled: true } });
+            // 2. Setup Buttons (Etherscan)
+            const receiptKeyboard = new InlineKeyboard()
+                .text("📸 View Etherscan Proof", "get_last_receipt")
+                .url("🔗 Open Explorer", `https://sepolia.etherscan.io/tx/${result.txHash}`);
+
+            // 3. Send Image + Text + Buttons
+            if (receiptImage) {
+                await ctx.replyWithPhoto(receiptImage, {
+                    caption: successMsg,
+                    reply_markup: receiptKeyboard
+                });
+            } else {
+                // Fallback if image gen fails
+                await ctx.reply(successMsg, { reply_markup: receiptKeyboard, link_preview_options: { is_disabled: true } });
+            }
         } else {
             auditLogger.logEvent("BLOCKCHAIN_EXECUTION", `Transfer to ${recipient}`, "FAILED", { error: result.error, amount });
             await ctx.reply(`❌ Transaction Failed\n\n${result.error}\n\nPlease check wallet balance and try again.`);
