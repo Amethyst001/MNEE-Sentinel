@@ -305,6 +305,9 @@ async function handleSentinelResponse(say: any, userId: string, response: any) {
 
 // Handle Emoji Reactions for Consensus
 app.event('reaction_added', async ({ event, client, say }) => {
+    const supportedKeys = ['lock_with_ink_pen', 'closed_lock_with_key', 'key', 'rocket'];
+    console.log(`🔍 DEBUG: Reaction Added Event! Rx: ${event.reaction} User: ${event.user} ItemTs: ${event.item.ts}`);
+    console.log(`ℹ️ Supported Master Keys: ${supportedKeys.join(', ')}`);
     const ts = event.item.ts;
     const pending = pendingConsensus.get(ts);
 
