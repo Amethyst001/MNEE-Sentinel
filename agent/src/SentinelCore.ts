@@ -63,9 +63,11 @@ export class SentinelCore {
             const audit = await this.auditor.auditMandate(intent, text);
 
             if (!audit.approved) {
-                // SPECIAL HANDLING: If rejected due to missing Multi-Sig, we escalate to Approval Flow
-                if (audit.reason.toLowerCase().includes("multi-sig") || audit.reason.toLowerCase().includes("approval")) {
-                    await this.logger.logEvent("AUDIT_ESCALATION", `Escalating for Multi-Sig: ${intent.recipient}`, "NEEDS_APPROVAL", { reason: audit.reason });
+                // SPECIAL HANDLING: If rejected due to missing Multi-Sig OR Limit checks, we escalate to Approval Flow
+                if (audit.reason.toLowerCase().includes("multi-sig") ||
+                    audit.reason.toLowerCase().includes("approval") ||
+                    audit.reason.toLowerCase().includes("limit exceeded")) {
+                    await this.logger.logEvent("AUDIT_ESCALATION", `Escalating to Approval Flow: ${intent.recipient}`, "NEEDS_APPROVAL", { reason: audit.reason });
 
                     // Fall through to SUCCESS flow to trigger UI
                 } else {
