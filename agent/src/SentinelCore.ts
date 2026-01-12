@@ -63,18 +63,25 @@ export class SentinelCore {
             const audit = await this.auditor.auditMandate(intent, text);
 
             if (!audit.approved) {
-                await this.logger.logEvent("AUDIT_BLOCKED", `Audit for ${intent.recipient}`, "BLOCKED", { reason: audit.reason });
+                // SPECIAL HANDLING: If rejected due to missing Multi-Sig, we escalate to Approval Flow
+                if (audit.reason.toLowerCase().includes("multi-sig") || audit.reason.toLowerCase().includes("approval")) {
+                    await this.logger.logEvent("AUDIT_ESCALATION", `Escalating for Multi-Sig: ${intent.recipient}`, "NEEDS_APPROVAL", { reason: audit.reason });
 
-                const bold = platform === 'SLACK' ? '*' : '**';
-                let msg = `🚫 ${bold}BLOCKED by Policy${bold}\n\n`;
-                const parts = audit.reason.split('|');
-                if (parts.length > 1) {
-                    msg += `${bold}${parts[0].replace('Title:', '').trim()}${bold}\n\n${parts[1].replace('Explanation:', '').trim()}`;
+                    // Fall through to SUCCESS flow to trigger UI
                 } else {
-                    msg += audit.reason;
-                }
+                    await this.logger.logEvent("AUDIT_BLOCKED", `Audit for ${intent.recipient}`, "BLOCKED", { reason: audit.reason });
 
-                return { status: 'BLOCKED', message: msg };
+                    const bold = platform === 'SLACK' ? '*' : '**';
+                    let msg = `🚫 ${bold}BLOCKED by Policy${bold}\n\n`;
+                    const parts = audit.reason.split('|');
+                    if (parts.length > 1) {
+                        msg += `${bold}${parts[0].replace('Title:', '').trim()}${bold}\n\n${parts[1].replace('Explanation:', '').trim()}`;
+                    } else {
+                        msg += audit.reason;
+                    }
+
+                    return { status: 'BLOCKED', message: msg };
+                }
             }
 
             // Generate ZK Proof for Compliance
